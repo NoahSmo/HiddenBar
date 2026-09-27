@@ -70,7 +70,8 @@ cd HiddenBar
 L'icône est générée par code :
 
 ```sh
-swift tools/make-icon.swift   # → Resources/AppIcon.icns + AppIcon.png
+swift tools/make-icon.swift     # → Resources/AppIcon.icns + AppIcon.png
+swift tools/make-social.swift   # → docs/social-preview.png (aperçu GitHub, 1280 × 640)
 ```
 
 ### Structure
@@ -81,6 +82,7 @@ Sources/HiddenBar/
 ├── AppDelegate.swift
 └── StatusBarController.swift  # chevron, séparateur, logique cacher/afficher
 tools/make-icon.swift          # génération de l'icône
+tools/make-social.swift        # image d'aperçu du dépôt
 build.sh                       # build universel (arm64 + x86_64) + bundle .app
 ```
 
