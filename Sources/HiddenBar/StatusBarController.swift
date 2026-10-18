@@ -18,6 +18,7 @@ final class StatusBarController {
     private let agentItemPadding: CGFloat = 16
 
     private var autoCollapseTimer: Timer?
+    private let updateChecker = UpdateChecker()
 
     private(set) var isCollapsed = false {
         didSet { updateAppearance() }
@@ -46,6 +47,7 @@ final class StatusBarController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
             self?.collapse()
         }
+        updateChecker.checkIfDue()
     }
 
     // MARK: - Actions
@@ -135,6 +137,16 @@ final class StatusBarController {
         menu.addItem(login)
 
         menu.addItem(.separator())
+        if let update = updateChecker.availableUpdate {
+            let item = NSMenuItem(title: "Mise à jour disponible : v\(update.version)", action: #selector(openUpdate), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        } else {
+            let item = NSMenuItem(title: "Rechercher des mises à jour…", action: #selector(checkForUpdates), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
         let help = NSMenuItem(title: "⌘ + glisser une icône à gauche de « / » pour la cacher", action: nil, keyEquivalent: "")
         help.isEnabled = false
         menu.addItem(help)
@@ -146,6 +158,33 @@ final class StatusBarController {
         toggleItem.menu = menu
         toggleItem.button?.performClick(nil)
         toggleItem.menu = nil
+    }
+
+    @objc private func openUpdate() {
+        updateChecker.openReleasePage()
+    }
+
+    @objc private func checkForUpdates() {
+        updateChecker.check { [weak self] success in
+            guard let self else { return }
+            let alert = NSAlert()
+            if !success {
+                alert.messageText = "Impossible de vérifier les mises à jour"
+                alert.informativeText = "Vérifie ta connexion et réessaie."
+            } else if let update = self.updateChecker.availableUpdate {
+                alert.messageText = "HiddenBar \(update.version) est disponible"
+                alert.informativeText = "Version installée : \(self.updateChecker.currentVersion).\nMise à jour : brew upgrade --cask hiddenbar, ou télécharge le zip."
+                alert.addButton(withTitle: "Télécharger")
+                alert.addButton(withTitle: "Plus tard")
+            } else {
+                alert.messageText = "HiddenBar est à jour"
+                alert.informativeText = "Version \(self.updateChecker.currentVersion)."
+            }
+            NSApp.activate(ignoringOtherApps: true)
+            if alert.runModal() == .alertFirstButtonReturn, self.updateChecker.availableUpdate != nil {
+                self.updateChecker.openReleasePage()
+            }
+        }
     }
 
     @objc private func toggleLaunchAtLogin() {

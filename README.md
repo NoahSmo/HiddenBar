@@ -18,7 +18,9 @@ Or download the zip from [Releases](https://github.com/NoahSmo/HiddenBar/release
 
 - <kbd>⌘</kbd>-drag icons to the left of the `|` separator to hide them.
 - Click the chevron to show / hide them.
-- Right-click the chevron for *Launch at login* and *Quit*.
+- Right-click the chevron for *Launch at login*, *Check for updates* and *Quit*.
+
+HiddenBar checks GitHub Releases once a day. When a newer version exists, the right-click menu shows *Update available*. Update with `brew upgrade --cask hiddenbar` or download the zip.
 
 Keep the app in `/Applications`: macOS 27 remembers icon positions per app location.
 
