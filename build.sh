@@ -5,8 +5,8 @@
 set -e
 cd "$(dirname "$0")"
 
-VERSION="1.0.0"
-BUILD_NUMBER="3"
+VERSION="1.1.0"
+BUILD_NUMBER="4"
 
 swift build -c release --arch arm64 --arch x86_64
 
