@@ -9,6 +9,9 @@ import ServiceManagement
 /// Sur macOS 27, `MenuBarAgent` dessine la barre : un item qui déborde est retiré
 /// avec tous ceux à sa gauche. Mais un item plus large que la moitié de l'écran
 /// est ignoré tout seul → d'où une largeur juste sous cette limite, pas 10 000.
+///
+/// Dès que des items débordent, MenuBarAgent affiche aussi son propre chevron « « »
+/// pour les rouvrir. Replié, on masque donc le nôtre pour ne pas en avoir deux.
 final class StatusBarController {
     private let toggleItem: NSStatusItem
     private let separatorItem: NSStatusItem
@@ -27,6 +30,9 @@ final class StatusBarController {
         // Créé en premier → placé le plus à droite.
         toggleItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         toggleItem.autosaveName = "hiddenbar_toggle"
+        // `isVisible` est persisté avec l'autosaveName : sans ça, quitter l'app
+        // repliée relancerait sans chevron.
+        toggleItem.isVisible = true
 
         separatorItem = NSStatusBar.system.statusItem(withLength: separatorVisibleLength)
         separatorItem.autosaveName = "hiddenbar_separator"
@@ -73,13 +79,20 @@ final class StatusBarController {
     /// les icônes hors de l'écran. Avec MenuBarAgent, la largeur max acceptée
     /// est la moitié de l'écran (padding compris).
     private func collapsedLength() -> CGFloat {
-        let hasMenuBarAgent = NSRunningApplication
-            .runningApplications(withBundleIdentifier: "com.apple.MenuBarAgent").isEmpty == false
         guard hasMenuBarAgent else { return 10_000 }
 
         let screen = separatorItem.button?.window?.screen ?? NSScreen.main
         let screenWidth = screen?.frame.width ?? 1440
-        return screenWidth / 2 - agentItemPadding - 8
+        // Avec une encoche, la place utile est celle à droite de l'encoche :
+        // plus large, les items déborderaient de l'autre côté (zone des menus
+        // d'app) et le chevron natif s'y afficherait aussi.
+        let usableWidth = screen?.auxiliaryTopRightArea?.width ?? screenWidth / 2
+        return min(usableWidth, screenWidth / 2) - agentItemPadding - 8
+    }
+
+    private var hasMenuBarAgent: Bool {
+        NSRunningApplication
+            .runningApplications(withBundleIdentifier: "com.apple.MenuBarAgent").isEmpty == false
     }
 
     func expand() {
@@ -122,6 +135,8 @@ final class StatusBarController {
         )
         // Le séparateur n'est utile visuellement que lorsque tout est déplié.
         separatorItem.button?.alphaValue = isCollapsed ? 0 : 1
+        // Replié sous MenuBarAgent, le chevron natif prend le relais.
+        toggleItem.isVisible = !(isCollapsed && hasMenuBarAgent)
     }
 
     // MARK: - Menu clic droit
