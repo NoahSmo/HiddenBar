@@ -56,7 +56,9 @@ final class UpdateChecker {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = json["tag_name"] as? String,
               let page = json["html_url"] as? String,
-              let url = URL(string: page)
+              let url = URL(string: page),
+              url.scheme == "https",
+              url.host == "github.com"
         else { return nil }
         return Release(version: tag.hasPrefix("v") ? String(tag.dropFirst()) : tag, url: url)
     }
