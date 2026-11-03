@@ -1,21 +1,15 @@
 import AppKit
 import ServiceManagement
 
-/// Gère les deux items de la barre des menus :
+/// Deux items dans la barre des menus :
 ///  - `toggleItem`    : le chevron cliquable (le plus à droite)
 ///  - `separatorItem` : la barre « | ». Tout ce qui est à sa GAUCHE est caché.
 ///
-/// Pour cacher, on élargit le séparateur jusqu'à ce qu'il déborde.
-/// Sur macOS 27, `MenuBarAgent` dessine la barre : un item qui déborde est retiré
-/// avec tous ceux à sa gauche. Mais un item plus large que la moitié de l'écran
-/// est ignoré tout seul → d'où une largeur juste sous cette limite, pas 10 000.
-///
-/// Dès que des items débordent, MenuBarAgent affiche aussi son propre chevron « « »
-/// pour les rouvrir. Replié, on masque donc le nôtre pour ne pas en avoir deux.
+/// Replié, le séparateur est élargi jusqu'à déborder : tout ce qui est à sa
+/// gauche est poussé hors de la barre. Déplié, il revient à 8 pt.
 final class StatusBarController {
     private let toggleItem: NSStatusItem
     private let separatorItem: NSStatusItem
-
     private let separatorVisibleLength: CGFloat = 8
     /// Padding ajouté par MenuBarAgent autour de chaque item (mesuré : ~16 pt).
     private let agentItemPadding: CGFloat = 16
@@ -36,17 +30,14 @@ final class StatusBarController {
         toggleItem.isVisible = true
 
         separatorItem = NSStatusBar.system.statusItem(withLength: separatorVisibleLength)
-        separatorItem.autosaveName = "hiddenbar_separator"
+        separatorItem.autosaveName = "hiddenbar_separator_v3"
 
         if let button = toggleItem.button {
             button.target = self
             button.action = #selector(toggleClicked(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
-        if let button = separatorItem.button {
-            button.image = NSImage(systemSymbolName: "poweron", accessibilityDescription: "Séparateur")
-            button.imageScaling = .scaleProportionallyDown
-        }
+        separatorItem.button?.imageScaling = .scaleProportionallyDown
 
         updateAppearance()
         // Cache au démarrage (légèrement différé : les positions doivent être connues).
@@ -54,6 +45,14 @@ final class StatusBarController {
             self?.collapse()
         }
         updateChecker.checkIfDue()
+
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self, self.isCollapsed else { return }
+            self.applyCollapsedLayout()
+        }
     }
 
     // MARK: - Actions
@@ -73,23 +72,20 @@ final class StatusBarController {
     func collapse() {
         guard canCollapse() else { return }
         autoCollapseTimer?.invalidate()
-        separatorItem.length = collapsedLength()
+        applyCollapsedLayout()
         isCollapsed = true
     }
 
-    /// Avant MenuBarAgent (macOS < 27), un séparateur géant pousse simplement
-    /// les icônes hors de l'écran. Avec MenuBarAgent, la largeur max acceptée
-    /// est la moitié de l'écran (padding compris).
-    private func collapsedLength() -> CGFloat {
-        guard hasMenuBarAgent else { return 10_000 }
-
+    /// Sans MenuBarAgent (macOS < 27) : séparateur énorme. Avec : MenuBarAgent ignore
+    /// un item plus large que la moitié de l'écran, on prend donc juste en dessous.
+    private func applyCollapsedLayout() {
+        guard hasMenuBarAgent else {
+            separatorItem.length = 10_000
+            return
+        }
         let screen = separatorItem.button?.window?.screen ?? NSScreen.main
-        let screenWidth = screen?.frame.width ?? 1440
-        // Avec une encoche, la place utile est celle à droite de l'encoche :
-        // plus large, les items déborderaient de l'autre côté (zone des menus
-        // d'app) et le chevron natif s'y afficherait aussi.
-        let usableWidth = screen?.auxiliaryTopRightArea?.width ?? screenWidth / 2
-        return min(usableWidth, screenWidth / 2) - agentItemPadding - 8
+        let width = screen?.frame.width ?? 1440
+        separatorItem.length = width / 2 - agentItemPadding - 8
     }
 
     private var hasMenuBarAgent: Bool {
@@ -136,9 +132,14 @@ final class StatusBarController {
             accessibilityDescription: isCollapsed ? "Afficher les icônes" : "Cacher les icônes"
         )
         // Le séparateur n'est utile visuellement que lorsque tout est déplié.
-        separatorItem.button?.alphaValue = isCollapsed ? 0 : 1
-        // Replié sous MenuBarAgent, le chevron natif prend le relais.
-        toggleItem.isVisible = !(isCollapsed && hasMenuBarAgent)
+        // On change l'image plutôt que alphaValue : MenuBarAgent ne rafraîchit pas
+        // toujours le rendu d'un item sur un simple changement d'opacité.
+        separatorItem.button?.image = isCollapsed ? nil : NSImage(
+            systemSymbolName: "poweron", accessibilityDescription: "Séparateur"
+        )
+        // Toujours visible : le chevron natif de MenuBarAgent n'appelle pas expand(),
+        // le cacher laissait l'utilisateur sans moyen de rouvrir.
+        toggleItem.isVisible = true
     }
 
     // MARK: - Menu clic droit
@@ -162,7 +163,7 @@ final class StatusBarController {
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        let help = NSMenuItem(title: "⌘ + glisser une icône à gauche de « / » pour la cacher", action: nil, keyEquivalent: "")
+        let help = NSMenuItem(title: "⌘ + glisser une icône à gauche de « | » pour la cacher, à droite pour la garder", action: nil, keyEquivalent: "")
         help.isEnabled = false
         menu.addItem(help)
         menu.addItem(.separator())
